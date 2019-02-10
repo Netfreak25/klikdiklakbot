@@ -321,6 +321,7 @@ def reply_filter(bot: Bot, update: Update) -> str:
     if not to_match:
         return ""
 
+    threshold = 7
     for keyword in chat_warn_filters:
         if ( keyword == "only_roman" ):
             count = 0
@@ -329,13 +330,17 @@ def reply_filter(bot: Bot, update: Update) -> str:
                     retval = only_roman_chars(i)
                     if not retval:
                         count += 1
-                    if count >= 3:
+                    if count >= threshold:
                         break
-                if ( count == 3 ):                    
+                if ( count == threshold ):                    
                     user = update.effective_user  # type: Optional[User]
                     reason = "Nicht romanische Zeichen"
                     return warn(user, chat, reason, message)
-
+                else:
+                    if ((count != 0) and ( (len(to_match) / 2) <= int(count))):
+                        user = update.effective_user  # type: Optional[User]
+                        reason = "Nicht romanische Zeichen"
+                        return warn(user, chat, reason, message)
         else:
             pattern = r"( |^|[^\w])" + re.escape(keyword) + r"( |$|[^\w])"
             if re.search(pattern, to_match, flags=re.IGNORECASE):
