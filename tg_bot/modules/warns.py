@@ -20,10 +20,22 @@ from tg_bot.modules.helper_funcs.string_handling import split_quotes
 from tg_bot.modules.log_channel import loggable
 from tg_bot.modules.sql import warns_sql as sql
 import tg_bot.modules.sql.ilikes_sql as sqllikes
+import unicodedata as ud
 
 WARN_HANDLER_GROUP = 9
 CURRENT_WARNING_FILTER_STRING = "<b>Konfigurierten Warn Filter für diesen Chat:</b>\n"
 
+latin_letters = {}
+def only_roman_chars(unistr):
+    return all(is_latin(uchr)
+           for uchr in unistr
+           if uchr.isalpha())
+
+
+def is_latin(uchr):
+    try: return latin_letters[uchr]
+    except KeyError:
+         return latin_letters.setdefault(uchr, 'LATIN' in ud.name(uchr))
 
 # Not async
 def warn(user: User, chat: Chat, reason: str, message: Message, warner: User = None) -> str:
@@ -310,11 +322,25 @@ def reply_filter(bot: Bot, update: Update) -> str:
         return ""
 
     for keyword in chat_warn_filters:
-        pattern = r"( |^|[^\w])" + re.escape(keyword) + r"( |$|[^\w])"
-        if re.search(pattern, to_match, flags=re.IGNORECASE):
-            user = update.effective_user  # type: Optional[User]
-            warn_filter = sql.get_warn_filter(chat.id, keyword)
-            return warn(user, chat, warn_filter.reply, message)
+        if ( keyword == "only_roman" ):
+            count = 0
+            if not only_roman_chars(to_match):
+                for i in to_match:
+                    retval = only_roman_chars(i)
+                    if retval:
+                        count += 1
+                    if count >= 3:
+                        break
+                if ( count == 3 ):                    
+                    user = update.effective_user  # type: Optional[User]
+                    reason = "Nicht romanische Zeichen"
+                    return warn(user, chat, reason, message)
+        else:
+            pattern = r"( |^|[^\w])" + re.escape(keyword) + r"( |$|[^\w])"
+            if re.search(pattern, to_match, flags=re.IGNORECASE):
+                user = update.effective_user  # type: Optional[User]
+                warn_filter = sql.get_warn_filter(chat.id, keyword)
+                return warn(user, chat, warn_filter.reply, message)
     return ""
 
 
@@ -420,6 +446,10 @@ be a sentence, encompass it with quotes, as such: `/addwarn "very angry" This is
  - /nowarn <keyword>: stop a warning filter
  - /warnlimit <num>: set the warning limit
  - /strongwarn <on/yes/off/no>: If set to on, exceeding the warn limit will result in a ban. Else, will just kick.
+
+*Trick:*
+ To block non roman characters you can add the keyword 'only_roman' to the blacklist and to the warnlist
+
 """
 
 __mod_name__ = "Wort - Verwarn."

@@ -12,10 +12,23 @@ from tg_bot.modules.disable import DisableAbleCommandHandler
 from tg_bot.modules.helper_funcs.chat_status import user_admin, user_not_admin
 from tg_bot.modules.helper_funcs.extraction import extract_text
 from tg_bot.modules.helper_funcs.misc import split_message
+import unicodedata as ud
 
 BLACKLIST_GROUP = 11
 
 BASE_BLACKLIST_STRING = "Current <b>blacklisted</b> words:\n"
+
+latin_letters = {}
+def only_roman_chars(unistr):
+    return all(is_latin(uchr)
+           for uchr in unistr
+           if uchr.isalpha())
+
+
+def is_latin(uchr):
+    try: return latin_letters[uchr]
+    except KeyError:
+         return latin_letters.setdefault(uchr, 'LATIN' in ud.name(uchr))
 
 
 @run_async
@@ -118,16 +131,35 @@ def del_blacklist(bot: Bot, update: Update):
 
     chat_filters = sql.get_chat_blacklist(chat.id)
     for trigger in chat_filters:
-        pattern = r"( |^|[^\w])" + re.escape(trigger) + r"( |$|[^\w])"
-        if re.search(pattern, to_match, flags=re.IGNORECASE):
-            try:
-                message.delete()
-            except BadRequest as excp:
-                if excp.message == "Message to delete not found":
-                    pass
-                else:
-                    LOGGER.exception("Error while deleting blacklist message.")
-            break
+        if ( trigger == "only_roman" ):
+            count = 0
+            if not only_roman_chars(to_match):
+                for i in to_match:
+                    retval = only_roman_chars(i)
+                    if retval:
+                        count += 1
+                    if count >= 3:
+                        break
+                if ( count == 3 ):                    
+                    try:
+                        message.delete()
+                    except BadRequest as excp:
+                        if excp.message == "Message to delete not found":
+                            pass
+                        else:
+                            LOGGER.exception("Error while deleting blacklist message.")
+                    break
+        else:
+            pattern = r"( |^|[^\w])" + re.escape(trigger) + r"( |$|[^\w])"
+            if re.search(pattern, to_match, flags=re.IGNORECASE):
+                try:
+                    message.delete()
+                except BadRequest as excp:
+                    if excp.message == "Message to delete not found":
+                        pass
+                    else:
+                        LOGGER.exception("Error while deleting blacklist message.")
+                break
 
 
 def __migrate__(old_chat_id, new_chat_id):
@@ -160,6 +192,10 @@ lines will allow you to add multiple triggers.
  - /unblacklist <triggers>: Remove triggers from the blacklist. Same newline logic applies here, so you can remove \
 multiple triggers at once.
  - /rmblacklist <triggers>: Same as above.
+
+*Trick:*
+To block non roman characters you can add the keyword 'only_roman' to the blacklist and to the warnlist
+
 """
 
 BLACKLIST_HANDLER = DisableAbleCommandHandler("blacklist", blacklist, filters=Filters.group, pass_args=True,
